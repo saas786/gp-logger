@@ -8,7 +8,7 @@ gp_tmpl_header();
 <table class="translation-sets">
 	<thead>
 		<tr>
-			<th>Discarded Warning</th>
+			<th>Event</th>
 			<th>Translation(s)</th>
 			<th>Validator</th>
 			<th>Time</th>
@@ -19,12 +19,12 @@ gp_tmpl_header();
 	<tbody>
 	<?php foreach ( $warnings as $warning ) :  ?>
 		<tr>
-			<td><?php echo $warning->tag; ?></td>
-			<td><?php echo esc_html( $warning->translation ); ?></td>
-			<td><?php echo $warning->user; ?></td>
-			<td><?php echo $warning->time; ?></td>
-			<td><?php echo $warning->project; ?></td>
-			<td><?php echo $warning->translation_set; ?></td>
+			<td><?php echo $warning->event; ?></td>
+			<td><?php //echo esc_html( $warning->translation ); ?></td>
+			<td><?php echo $warning->user_id; ?></td>
+			<td><?php echo $warning->date_added; ?></td>
+			<td><?php //echo $warning->project; ?></td>
+			<td><?php echo $warning->translation_set_id; ?></td>
 		</tr>
 	<?php endforeach; ?>
 	</tbody>

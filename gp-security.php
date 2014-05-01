@@ -3,46 +3,83 @@
 class GP_Security extends GP_Plugin {
 
 	var $meta_key = 'security_warning';
+	var $id = 'security';
+
+	static $log_entry;
 
 	public function __construct() {
 		parent::__construct();
+		$this->db_setup();
 		GP::$router->add( '/security', array( 'GP_Route_Security', 'security' ) );
 		add_action( 'warning_discarded', array( $this, 'warning_discarded' ), 10, 5 );
 	}
 
-	function warning_discarded( $project, $translation_set, $translation, $tag, $user ){
+
+	function db_setup() {
+		global $gpdb;
+		global $gp_table_prefix;
+
+		//TODO: only setup table with "secret" query string
+		if ( $gpdb->query( "SHOW TABLES LIKE 'gp_security_log'" ) ) {
+			$gpdb->set_prefix( $gp_table_prefix , array('security_log'));
+			return;
+		}
+
+		require_once( BACKPRESS_PATH . 'class.bp-sql-schema-parser.php' );
+		$sql = "CREATE TABLE IF NOT EXISTS `gp_security_log` (
+	        `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+	        `translation_set_id` int(10) unsigned NOT NULL,
+	        `translation_id` int(10) NOT NULL,
+	        `event` varchar(30) DEFAULT NULL,
+	        `date_added` datetime NOT NULL,
+			`date_modified` datetime NOT NULL,
+	        `user_id` int(10) NOT NULL,
+	        `status` varchar(20) NOT NULL DEFAULT 'waiting',
+	        PRIMARY KEY (`id`),
+	        KEY `translation_set_id_status` (`translation_set_id`,`status`),
+	        KEY `event` (`event`),
+	        KEY `user_id` (`user_id`),
+	        KEY `date_modified` (`date_modified`),
+	        KEY `date_added` (`date_added`)
+		);";
+
+		$alterations = BP_SQL_Schema_Parser::delta( $gpdb, $sql );
+
+		$errors = $alterations['errors'];
+		if ( $errors )  {
+			return $errors;
+		} else {
+			$gpdb->set_prefix( $gp_table_prefix , array('security_log') );
+		}
+	}
+
+	function warning_discarded( $project_id, $translation_set_id, $translation_id, $warning, $user_id ){
+		global $gp_security_log_entry;
 		$meta_data = compact( 'translation', 'tag', 'user' );
 
 		$meta_data['time'] = time();
 
-		switch ( $tag ) {
+		switch ( $warning ) {
 			case 'urls': //TODO: implement in core GP, see https://glotpress.trac.wordpress.org/ticket/307
 			case 'tags':
-				$warnings = maybe_unserialize( $this->get_set_security_warning( $translation_set ) );
-				if ( is_array( $warnings ) ) {
-					$warnings[] = $meta_data;
-				} else {
-					$warnings = array( $meta_data );
+				$log_item = new GP_Security_Log_Entry( );
+				$log_item->translation_set_id = $translation_set_id;
+				$log_item->translation_id = $translation_id;
+				$log_item->event = 'warning_discarded_' . $warning;
+				$log_item->user_id = $user_id;
+				$log_item->status = 'waiting';
+
+				if( $log_item->validate() ) {
+					$gp_security_log_entry->create( $log_item );
 				}
-				gp_update_meta( $translation_set, $this->meta_key, $warnings, 'translation_set' );
-				break;
 		}
 
 	}
 
 	function get_set_security_warning( $set_id ) {
-		return gp_get_meta( 'translation_set', $set_id, $this->meta_key );
+		//TODO: implement
 	}
 
-	function clear_security_warning( $set_id, $meta_data ) {
-		return gp_delete_meta( $set_id, $this->meta_key, $meta_data );
-	}
-
-	function sets_with_warnings() {
-		global $gpdb;
-		//TODO: meta by object type and key method
-		return $gpdb->get_results( $gpdb->prepare( "SELECT * FROM `$gpdb->meta` WHERE `object_type` = %s AND `meta_key` = %s", 'translation_set', $this->meta_key ) );
-	}
 }
 
 GP::$plugins->security = new GP_Security;
@@ -55,24 +92,20 @@ class GP_Route_Security extends GP_Route_Main {
 	}
 
 	 function security() {
-		$warnings = array();
-		$sets = GP::$plugins->security->sets_with_warnings();
-		foreach ( $sets as $set ) {
-			$meta_data = unserialize( $set->meta_value );
-			$_translation_set = GP::$translation_set->get( $set->object_id );
-			$_path= GP::$project->get( $_translation_set->project_id )->path;
-			foreach ( $meta_data as $w ) {
-				$warning = new stdClass();
-				$warning->time = $w['time'];
-				$warning->translation_set = $_translation_set->locale .  '/'  . $_translation_set->slug;
-				$warning->project = $_path;
-				$warning->translation = GP::$translation->get( $w['translation'] )->translation_0;
-				$warning->user = GP::$user->get( $w['user'] )->user_nicename;
-				$warning->tag = $w['tag'];
-				$warnings[] = $warning;
-			}
-		}
+		global $gp_security_log_entry;
+		$warnings = $gp_security_log_entry->all();
 
 		$this->tmpl('security', get_defined_vars() );
 	}
 }
+
+
+class GP_Security_Log_Entry extends GP_Thing {
+
+	var $table_basename = 'security_log';
+	var $field_names = array( 'id', 'translation_set_id', 'translation_id', 'event', 'date_added', 'date_modified', 'user_id', 'status' );
+	var $non_updatable_attributes = array( 'id' );
+
+}
+
+$gp_security_log_entry = new GP_Security_Log_Entry();
