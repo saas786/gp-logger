@@ -11,6 +11,7 @@ class GP_Security extends GP_Plugin {
 		parent::__construct();
 		$this->db_setup();
 		GP::$router->add( '/security', array( 'GP_Route_Security', 'security' ) );
+		GP::$router->add( '/security/-set-status', array( 'GP_Route_Security', 'set_status' ) );
 		add_action( 'warning_discarded', array( $this, 'warning_discarded' ), 10, 5 );
 	}
 
@@ -20,6 +21,8 @@ class GP_Security extends GP_Plugin {
 		global $gp_table_prefix;
 
 		//TODO: only setup table with "secret" query string
+
+		//TODO: use an option instead fo show tables
 		if ( $gpdb->query( "SHOW TABLES LIKE 'gp_security_log'" ) ) {
 			$gpdb->set_prefix( $gp_table_prefix , array('security_log'));
 			return;
@@ -76,8 +79,9 @@ class GP_Security extends GP_Plugin {
 
 	}
 
-	function get_set_security_warning( $set_id ) {
-		//TODO: implement
+	function get_set_security_warnings( $set_id ) {
+		global $gp_security_log_entry;
+		return $gp_security_log_entry->by_translation_set_id( $set_id );
 	}
 
 }
@@ -92,10 +96,26 @@ class GP_Route_Security extends GP_Route_Main {
 	}
 
 	 function security() {
+		 //TODO: permissions
 		global $gp_security_log_entry;
 		$warnings = $gp_security_log_entry->all();
 
 		$this->tmpl('security', get_defined_vars() );
+	}
+
+
+	function set_status(){
+		$log_id = absint( gp_post( 'log_id' ) );
+
+		//TODO: whitelist status
+		$status = gp_post( 'post' );
+
+		$entry = $gp_security_log_entry->get( $log_id );
+
+		//TODO: permissions
+		$entry->set_status( $status );
+
+
 	}
 }
 
@@ -105,6 +125,22 @@ class GP_Security_Log_Entry extends GP_Thing {
 	var $table_basename = 'security_log';
 	var $field_names = array( 'id', 'translation_set_id', 'translation_id', 'event', 'date_added', 'date_modified', 'user_id', 'status' );
 	var $non_updatable_attributes = array( 'id' );
+
+	function restrict_fields( $security_log_entry ) {
+		$security_log_entry->translation_set_id_should_be( 'positive_int' );
+		$security_log_entry->translation_id_should_be( 'positive_int' );
+		$security_log_entry->event_should_not_be( 'empty' );
+		$security_log_entry->user_id_should_be( 'positive_int' );
+		$security_log_entry->status_should_not_be( 'empty' );
+	}
+
+	function by_translation_set_id( $translation_set_id ) {
+		return $this->many( "SELECT * FROM $this->table WHERE transaltion_set_id= %d", $translation_set_id );
+	}
+
+	function set_status( $status ) {
+		return $this->update( array( 'status' => $status ) );
+	}
 
 }
 
