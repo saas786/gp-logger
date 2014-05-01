@@ -18,7 +18,6 @@ gp_tmpl_header();
 	</thead>
 	<tbody>
 	<?php foreach ( $warnings as $warning ) :  ?>
-		<?php gp_error_log_dump($warning); ?>
 		<tr>
 			<td><?php echo $warning->tag; ?></td>
 			<td><?php echo esc_html( $warning->translation ); ?></td>
