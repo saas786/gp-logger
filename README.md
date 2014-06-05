@@ -1,4 +1,4 @@
-gp-security
+gp-logger
 ===========
 
-Security logging plugin for GlotPress
+Logging plugin for GlotPress
